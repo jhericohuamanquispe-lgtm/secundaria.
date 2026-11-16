@@ -20,11 +20,50 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // =========================================================================
-  // GESTOR DE FOTOS (INSIGNIA, PORTADA, UNIFORMES, ESCOLTAS, PROMOS Y LOGROS)
+  // GESTOR DE FOTOS CONECTADO A GOOGLE SHEETS + GOOGLE DRIVE
   // =========================================================================
+  const URL_CSV_FOTOS = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6urcZfSYYLDMT--EWRQsFIzpMCkJFfOrsywH_JSMt18187P1NkA3D_bW3o9WE8XS6h7jVgudeNEFe/pub?gid=388487208&single=true&output=csv';
+  let fotosNube = {};
+
+  function normalizarUrlDrive(url) {
+    if (!url) return '';
+    const limpia = url.trim();
+    const match = limpia.match(/\/d\/([a-zA-Z0-9_-]+)/) || limpia.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://lh3.googleusercontent.com/d/${match[1]}=s1200`;
+    }
+    return limpia;
+  }
+
+  async function cargarFotosDesdeSheets() {
+    if (!URL_CSV_FOTOS) return;
+    try {
+      const resp = await fetch(URL_CSV_FOTOS);
+      const texto = await resp.text();
+      const lineas = texto.trim().split(/\r?\n/).slice(1);
+      lineas.forEach(linea => {
+        const idxComa = linea.indexOf(',');
+        if (idxComa > -1) {
+          const clave = linea.slice(0, idxComa).trim().replace(/^"|"$/g, '');
+          const urlRaw = linea.slice(idxComa + 1).trim().replace(/^"|"$/g, '');
+          if (clave && urlRaw) {
+            fotosNube[clave] = normalizarUrlDrive(urlRaw);
+          }
+        }
+      });
+      aplicarFotosFijas();
+      if (typeof seleccionarPromocion === 'function') {
+        seleccionarPromocion(anioPromoActivo);
+      }
+    } catch (e) {
+      console.warn('No se pudieron cargar fotos desde Sheets:', e);
+    }
+  }
+
   function obtenerFotosGuardadas() {
     const raw = localStorage.getItem('mlge_fotos_v1');
-    return raw ? JSON.parse(raw) : {};
+    const locales = raw ? JSON.parse(raw) : {};
+    return { ...locales, ...fotosNube };
   }
 
   function guardarFotoLocal(clave, dataUrl) {
@@ -39,7 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Comprime la imagen antes de guardarla para que no llene memoria
   function comprimirImagen(file, callback) {
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -59,13 +97,16 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.readAsDataURL(file);
   }
 
-  // Carga una imagen intentando varias rutas/extensiones y mostrando placeholder si no existe
   function configurarImagenConRespaldo(imgEl, placeholderEl, claveStorage, rutasCandidatas, esEmblema = false) {
     const guardadas = obtenerFotosGuardadas();
     if (guardadas[claveStorage]) {
       imgEl.src = guardadas[claveStorage];
       imgEl.style.display = 'block';
       if (placeholderEl) placeholderEl.style.display = 'none';
+      imgEl.onerror = () => {
+        imgEl.style.display = 'none';
+        if (placeholderEl) placeholderEl.style.display = 'flex';
+      };
       return;
     }
 
@@ -88,7 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function aplicarFotosFijas() {
-    // 1. Insignia (Nav, Hero y Footer)
     ['imgInsigniaNav', 'imgInsigniaHero', 'imgInsigniaFooter'].forEach(id => {
       const el = document.getElementById(id);
       if (el) {
@@ -102,7 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // 2. Portada Educación Secundaria de Menores
     configurarImagenConRespaldo(
       document.getElementById('imgFotoPortada'),
       document.getElementById('placeholderPortada'),
@@ -110,7 +149,6 @@ document.addEventListener('DOMContentLoaded', () => {
       ['portada.jpg', 'portada.png', 'colegio-chipa.jpg', 'img/portada.jpg', 'img/colegio-chipa.jpg']
     );
 
-    // 3. Uniformes
     configurarImagenConRespaldo(
       document.getElementById('imgUniformeDiario'),
       document.getElementById('placeholderUniformeDiario'),
@@ -912,4 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
       box.innerHTML = `<p style="color:#991B1B;font-weight:700;">No hay calificaciones registradas para el DNI ${dni}.</p>`;
     }
   });
+
+  // Cargar fotos publicadas desde Google Sheets al iniciar
+  cargarFotosDesdeSheets();
 });
