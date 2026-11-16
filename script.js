@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
       aplicarFotosFijas();
+      renderizarLogros();
       if (typeof seleccionarPromocion === 'function') {
         seleccionarPromocion(anioPromoActivo);
       }
@@ -60,47 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function obtenerFotosGuardadas() {
-    const raw = localStorage.getItem('mlge_fotos_v1');
-    const locales = raw ? JSON.parse(raw) : {};
-    return { ...locales, ...fotosNube };
-  }
-
-  function guardarFotoLocal(clave, dataUrl) {
-    const fotos = obtenerFotosGuardadas();
-    fotos[clave] = dataUrl;
-    try {
-      localStorage.setItem('mlge_fotos_v1', JSON.stringify(fotos));
-      return true;
-    } catch (e) {
-      notificar('La foto es muy pesada. Usa una imagen más ligera.');
-      return false;
-    }
-  }
-
-  function comprimirImagen(file, callback) {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const maxAncho = 900;
-        const escala = img.width > maxAncho ? maxAncho / img.width : 1;
-        canvas.width = img.width * escala;
-        canvas.height = img.height * escala;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        callback(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function configurarImagenConRespaldo(imgEl, placeholderEl, claveStorage, rutasCandidatas, esEmblema = false) {
-    const guardadas = obtenerFotosGuardadas();
-    if (guardadas[claveStorage]) {
-      imgEl.src = guardadas[claveStorage];
+  function configurarImagenConRespaldo(imgEl, placeholderEl, claveSheets, rutasCandidatas) {
+    if (!imgEl) return;
+    if (fotosNube[claveSheets]) {
+      imgEl.src = fotosNube[claveSheets];
       imgEl.style.display = 'block';
       if (placeholderEl) placeholderEl.style.display = 'none';
       imgEl.onerror = () => {
@@ -136,8 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
           el,
           el.nextElementSibling,
           'insignia',
-          ['insignia.png', 'insignia.jpg', 'insignia.jpeg', 'img/insignia.png', 'img/insignia.jpg'],
-          true
+          ['insignia.png', 'insignia.jpg', 'insignia.jpeg', 'img/insignia.png', 'img/insignia.jpg']
         );
       }
     });
@@ -164,39 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
-  let claveFotoDestino = '';
-  const selectorGlobal = document.getElementById('selectorFotoGlobal');
-
-  window.abrirSelectorFoto = (clave) => {
-    if (!modoAdmin) {
-      document.getElementById('modalLoginAdmin').classList.remove('oculto');
-      return;
-    }
-    claveFotoDestino = clave;
-    selectorGlobal.click();
-  };
-
-  window.abrirAdminGlobal = () => {
-    if (modoAdmin) {
-      actualizarPanelesAdmin();
-      notificar('Modo edición activo: usa los botones "Subir Foto" en cada tarjeta.');
-    } else {
-      document.getElementById('modalLoginAdmin').classList.remove('oculto');
-    }
-  };
-
-  selectorGlobal.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file || !claveFotoDestino) return;
-    comprimirImagen(file, (dataUrl) => {
-      if (guardarFotoLocal(claveFotoDestino, dataUrl)) {
-        aplicarFotosFijas();
-        seleccionarPromocion(anioPromoActivo);
-        notificar('Fotografía actualizada correctamente.');
-      }
-    });
-    e.target.value = '';
-  });
+  // Eliminar todos los botones locales de subida de fotos en el HTML
+  document.querySelectorAll('.btn-subir-foto-flotante, [onclick*="abrirAdminGlobal"], [onclick*="abrirSelectorFoto"]').forEach(btn => btn.remove());
 
   aplicarFotosFijas();
 
@@ -257,7 +189,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const claveEscolta = `escolta_${anio}`;
     const clavePromo = `promo_${anio}`;
-    const claseBotonAdmin = modoAdmin ? 'btn-subir-foto-flotante solo-admin' : 'btn-subir-foto-flotante solo-admin oculto';
 
     visorPromo.innerHTML = `
       <div class="flex-row" style="margin-bottom:16px;flex-wrap:wrap;gap:8px;">
@@ -273,11 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <img id="imgEscoltaAnio" alt="Escolta ${anio}">
             <div class="placeholder-foto" id="phEscoltaAnio">
               <i class="fa-solid fa-flag"></i>
-              <span>Foto Escolta ${anio} (<code>escolta-${anio}.jpg</code>)</span>
+              <span>Escolta Oficial ${anio}</span>
             </div>
-            <button type="button" class="${claseBotonAdmin}" onclick="abrirSelectorFoto('${claveEscolta}')">
-              <i class="fa-solid fa-camera"></i> Subir Foto Escolta
-            </button>
           </div>
           <div class="tarjeta-con-foto-body">
             <h4><i class="fa-solid fa-flag"></i> Escolta Oficial (${anio})</h4>
@@ -292,11 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <img id="imgPromoAnio" alt="Promoción ${anio}">
             <div class="placeholder-foto" id="phPromoAnio">
               <i class="fa-solid fa-user-graduate"></i>
-              <span>Foto Promoción ${anio} (<code>promocion-${anio}.jpg</code>)</span>
+              <span>Promoción ${anio}</span>
             </div>
-            <button type="button" class="${claseBotonAdmin}" onclick="abrirSelectorFoto('${clavePromo}')">
-              <i class="fa-solid fa-camera"></i> Subir Foto Promoción
-            </button>
           </div>
           <div class="tarjeta-con-foto-body">
             <h4><i class="fa-solid fa-user-graduate"></i> ${textoPromo}</h4>
@@ -612,19 +537,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderizarLogros() {
     const cont = document.getElementById('contenedorLogros');
-    const claseBotonAdmin = modoAdmin ? 'btn-subir-foto-flotante solo-admin' : 'btn-subir-foto-flotante solo-admin oculto';
-
     cont.innerHTML = obtenerLogros().map(l => `
       <div class="tarjeta-con-foto">
         <div class="marco-foto-tarjeta">
           <img id="imgLogro_${l.id}" alt="${l.titulo}">
           <div class="placeholder-foto" id="phLogro_${l.id}">
             <i class="fa-solid fa-trophy"></i>
-            <span>Foto del Logro (<code>${l.fotoDefault || 'logro.jpg'}</code>)</span>
+            <span>Logro Institucional</span>
           </div>
-          <button type="button" class="${claseBotonAdmin}" onclick="cambiarFotoLogro(${l.id})">
-            <i class="fa-solid fa-camera"></i> Cambiar Foto
-          </button>
         </div>
         <div class="tarjeta-con-foto-body">
           <span class="badge-crema">${l.categoria}</span>
@@ -638,32 +558,9 @@ document.addEventListener('DOMContentLoaded', () => {
     obtenerLogros().forEach(l => {
       const img = document.getElementById(`imgLogro_${l.id}`);
       const ph = document.getElementById(`phLogro_${l.id}`);
-      if (l.fotoData) {
-        img.src = l.fotoData;
-        img.style.display = 'block';
-        ph.style.display = 'none';
-      } else {
-        configurarImagenConRespaldo(img, ph, `logro_foto_${l.id}`, [l.fotoDefault || 'logro.jpg', `img/${l.fotoDefault}`]);
-      }
+      configurarImagenConRespaldo(img, ph, `logro_foto_${l.id}`, [l.fotoDefault || 'logro.jpg', `img/${l.fotoDefault}`]);
     });
   }
-
-  window.cambiarFotoLogro = (idLogro) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      comprimirImagen(file, (dataUrl) => {
-        const lista = obtenerLogros().map(item => item.id === idLogro ? { ...item, fotoData: dataUrl } : item);
-        localStorage.setItem('mlge_logros_v2', JSON.stringify(lista));
-        renderizarLogros();
-        notificar('Foto del logro actualizada.');
-      });
-    };
-    input.click();
-  };
 
   function actualizarPanelesAdmin() {
     document.querySelectorAll('.solo-admin').forEach(el => {
@@ -752,14 +649,6 @@ document.addEventListener('DOMContentLoaded', () => {
     notificar('Comunicado publicado.');
   });
 
-  let fotoLogroTemporal = '';
-  document.getElementById('inputFotoLogro').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    document.getElementById('labelFotoLogro').textContent = `Foto lista: ${file.name}`;
-    comprimirImagen(file, (dataUrl) => { fotoLogroTemporal = dataUrl; });
-  });
-
   document.getElementById('formNuevoLogro').addEventListener('submit', (e) => {
     e.preventDefault();
     const lista = obtenerLogros();
@@ -767,12 +656,9 @@ document.addEventListener('DOMContentLoaded', () => {
       id: Date.now(),
       categoria: document.getElementById('logroCategoria').value,
       titulo: document.getElementById('logroTitulo').value,
-      texto: document.getElementById('logroTexto').value,
-      fotoData: fotoLogroTemporal || ''
+      texto: document.getElementById('logroTexto').value
     });
     localStorage.setItem('mlge_logros_v2', JSON.stringify(lista));
-    fotoLogroTemporal = '';
-    document.getElementById('labelFotoLogro').textContent = 'Seleccionar fotografía del logro o trofeo (Opcional)';
     e.target.reset();
     renderizarLogros();
     notificar('Logro publicado.');
@@ -849,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // =========================================================================
-  // 7. CONSULTA DE NOTAS POR DNI (34 ESTUDIANTES - GOOGLE SHEETS CSV O LOCAL)
+  // 7. CONSULTA DE NOTAS POR DNI (GOOGLE SHEETS CSV O LOCAL)
   // =========================================================================
   const URL_CSV_NOTAS = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6urcZfSYYLDMT--EWRQsFIzpMCkJFfOrsywH_JSMt18187P1NkA3D_bW3o9WE8XS6h7jVgudeNEFe/pub?gid=0&single=true&output=csv';
 
